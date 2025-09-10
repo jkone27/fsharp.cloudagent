@@ -178,3 +178,8 @@ TestResults.xml
 nuget/*.nupkg
 
 .fake
+
+## ignore fsdocs temp output
+tmp/
+output/
+.fsdocs/

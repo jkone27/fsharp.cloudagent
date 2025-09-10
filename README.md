@@ -6,3 +6,22 @@ FSharp.CloudAgent is a simple framework for making distributed F# Agents in the 
 - [@isaacabraham](https://github.com/isaacabraham)
 
 The default maintainer account for projects under "fsprojects" is [@fsprojectsgit](https://github.com/fsprojectsgit) - F# Community Project Incubation Space (repo management)
+
+
+## Build
+
+```
+dotnet build
+```
+
+## Test
+
+```
+dotnet test
+```
+
+## Docs
+
+```
+dotnet fsdocs watch
+```

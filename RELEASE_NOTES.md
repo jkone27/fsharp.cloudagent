@@ -16,4 +16,6 @@
 * using Azure.Messaging.ServiceBus library
 * removed paket to simplify usage for .net users
 * added devcontainer
-* replaces travis with CI build
+* replaces travis with CI build in github workflows
+* added fsdocs-tool
+* added dotnet-outdated-tool
