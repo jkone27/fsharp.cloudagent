@@ -10,3 +10,10 @@
 ### 0.3
 * Explicit session abandonment.
 * Batch message support.
+
+### 0.4 - Breaking Changes
+* moved to .netstandard2.0 and net8.0 support
+* using Azure.Messaging.ServiceBus library
+* removed paket to simplify usage for .net users
+* added devcontainer
+* replaces travis with CI build

@@ -100,7 +100,6 @@ publish/
 
 # Enable nuget.exe in the .nuget folder (though normally executables are not tracked)
 !.nuget/NuGet.exe
-!.paket/Packet.exe.bootstrapper
 .paket/
 
 # Windows Azure Build Output
@@ -177,3 +176,5 @@ TestResults.xml
 
 # Nuget outputs
 nuget/*.nupkg
+
+.fake

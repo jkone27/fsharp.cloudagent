@@ -1,17 +1,12 @@
-﻿#I @"..\..\src\FSharp.CloudAgent\"
-#I @"..\..\packages\"
+﻿#r "nuget: Azure.Messaging.ServiceBus, 7.20.1"
+#r "nuget: Newtonsoft.Json, 13.0.3"
 
-#r @"WindowsAzure.ServiceBus\lib\net40-full\Microsoft.ServiceBus.dll"
-#r @"Newtonsoft.Json\lib\net45\Newtonsoft.Json.dll"
-#r @"System.Runtime.Serialization.dll"
-#load "Types.fs"
-#load "Actors.fs"
-#load "Messaging.fs"
-#load "ConnectionFactory.fs"
+#r "../../bin/net8.0/FSharp.CloudAgent.dll"
 
 open FSharp.CloudAgent
 open FSharp.CloudAgent.Connections
 open FSharp.CloudAgent.Messaging
+open FSharp.CloudAgent.ConnectionFactory
 
 // Connection strings to different service bus queues
 let connectionString = ServiceBusConnection "Endpoint=sb://yourServiceBus.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=yourKey"
@@ -22,9 +17,9 @@ type Person = { Name : string; Age : int }
 
 
 
-(* ------------- Standard F# Agent --------------- *)
+(* ------------- Standard F# Agent (typed) --------------- *)
 
-let createBasicAgent (ActorKey actorKey) =
+let createBasicAgentPerson (ActorKey actorKey) =
     new MailboxProcessor<Person>(fun mailbox ->
         async {
             while true do
@@ -32,24 +27,34 @@ let createBasicAgent (ActorKey actorKey) =
                 printfn "Actor %s has received message '%A', processing..." actorKey message
         })
 
-// Start listening for messages without any error resilience
-let disposable = ConnectionFactory.StartListening(workerConn, createBasicAgent >> BasicCloudAgent)
+// Adapter: produce CloudAgentKind<obj> by wrapping a typed MailboxProcessor<Person>
+let createBasicAgentObj (ak:ActorKey) : CloudAgentKind<obj> =
+    let personAgent = createBasicAgentPerson ak
+    let boxed = new MailboxProcessor<obj>(fun inbox ->
+        async {
+            while true do
+                let! o = inbox.Receive()
+                let p = unbox<Person> o
+                personAgent.Post p
+        })
+    BasicCloudAgent(boxed)
 
-// Send a message to the worker pool
+// Start listening for messages as obj
+let disposable = StartListening<obj>(workerConn, createBasicAgentObj)
+
+// Send a message to the worker pool (box the Person)
 { Name = "Isaac"; Age = 34 }
-|> ConnectionFactory.SendToWorkerPool workerConn
+|> box
+|> SendToWorkerPool<obj> workerConn
 |> Async.RunSynchronously
 
 disposable.Dispose()
 
 
 
+(* ------------- Resilient F# Agent (typed) --------------- *)
 
-
-
-(* ------------- Resilient F# Agent using Service Bus to ensure processing of messages --------------- *)
-
-let createResilientAgent (ActorKey actorKey) =
+let createResilientAgentPerson (ActorKey actorKey) =
     MailboxProcessor.Start(fun mailbox ->
         async {
             while true do
@@ -64,25 +69,36 @@ let createResilientAgent (ActorKey actorKey) =
                 reply response
         })
 
-// Start listening for messages with built-in error resilience
-ConnectionFactory.StartListening(workerConn, createResilientAgent >> ResilientCloudAgent)
+let createResilientAgentObj (ak:ActorKey) : CloudAgentKind<obj> =
+    let personAgent = createResilientAgentPerson ak
+    let boxed = MailboxProcessor<obj * (MessageProcessedStatus -> unit)>.Start(fun inbox ->
+        async {
+            while true do
+                let! o, reply = inbox.Receive()
+                let p = unbox<Person> o
+                personAgent.Post(p, reply)
+        })
+    ResilientCloudAgent(boxed)
+
+// Start listening for resilient agents
+StartListening<obj>(workerConn, createResilientAgentObj) |> ignore
 
 // Send a message to the worker pool
 { Name = "Isaac"; Age = 34 } 
-|> ConnectionFactory.SendToWorkerPool workerConn
+|> box
+|> SendToWorkerPool<obj> workerConn
 |> Async.RunSynchronously
-
 
 
 
 (* ------------- Actor-based F# Agents using Service Bus sessions to ensure synchronisation of messages--------------- *)
 
-// Start listening for actor messages with built-in error resilient
-let actorDisposable = ConnectionFactory.StartListening(actorConn, createResilientAgent >> ResilientCloudAgent)
+let actorDisposable = StartListening<obj>(actorConn, createResilientAgentObj)
 
-// Send a message 
+// Send a message to an actor (box the Person)
 { Name = "Isaac"; Age = 34 } 
-|> ConnectionFactory.SendToActorPool actorConn (ActorKey "Tim")
+|> box
+|> SendToActorPool<obj> actorConn (ActorKey "Tim")
 |> Async.RunSynchronously
 
 actorDisposable.Dispose()

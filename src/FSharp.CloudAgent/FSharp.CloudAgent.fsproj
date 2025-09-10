@@ -4,9 +4,9 @@
     <OutputType>Library</OutputType>
     <RootNamespace>FSharp.AzureActors</RootNamespace>
     <AssemblyName>FSharp.CloudAgent</AssemblyName>
-    <TargetFramework>net451</TargetFramework>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <Name>FSharp.CloudAgent</Name>
-    <DebugType>pdbonly</DebugType>
+    <DebugType>portable</DebugType>
     <Optimize>true</Optimize>
     <Tailcalls>true</Tailcalls>
     <OutputPath>..\..\bin\</OutputPath>
@@ -18,8 +18,9 @@
     <Compile Include="Actors.fs" />
     <Compile Include="ConnectionFactory.fs" />
     <Compile Include="CustomAssemblyPermissions.fs" />
-    <Content Include="paket.references" />
-    <Content Include="app.config" />
   </ItemGroup>
-  <Import Project="..\..\.paket\Paket.Restore.targets" />
+  <ItemGroup>
+    <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.20.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
 </Project>

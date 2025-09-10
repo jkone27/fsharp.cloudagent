@@ -4,18 +4,20 @@ open FSharp.CloudAgent
 open System
 open Newtonsoft.Json
 open System.Runtime.Serialization
+open Azure.Messaging.ServiceBus
+open System.Threading.Tasks
+open System.Threading
 
 [<AutoOpen>]
 module internal Streams = 
-    open Microsoft.ServiceBus.Messaging
     open FSharp.CloudAgent.Messaging
 
     /// Represents a stream of cloud messages.
     type ICloudMessageStream = 
         abstract GetNextMessage : TimeSpan -> Async<SimpleCloudMessage option>
-        abstract CompleteMessage : Guid -> Async<unit>
-        abstract AbandonMessage : Guid -> Async<unit>
-        abstract DeadLetterMessage : Guid -> Async<unit>
+        abstract CompleteMessage : SimpleCloudMessage -> Async<unit>
+        abstract AbandonMessage : SimpleCloudMessage -> Async<unit>
+        abstract DeadLetterMessage : SimpleCloudMessage -> Async<unit>
 
     /// Represents a stream of messages for a specific actor.
     type IActorMessageStream = 
@@ -24,56 +26,57 @@ module internal Streams =
         abstract AbandonSession : unit -> Async<unit>
         abstract SessionId : ActorKey
 
-    type private QueueStream(receiver : MessageReceiver, wireSerializer : XmlObjectSerializer) =
+    type private QueueStream(receiver : ServiceBusReceiver) =
         interface ICloudMessageStream with            
-            member __.DeadLetterMessage(token) = 
-                token
-                |> receiver.DeadLetterAsync
-                |> Async.AwaitTaskEmpty
-            
-            member __.AbandonMessage(token) = 
-                token
-                |> receiver.AbandonAsync
-                |> Async.AwaitTaskEmpty
-            
-            member __.CompleteMessage(token) = 
-                token
-                |> receiver.CompleteAsync
-                |> Async.AwaitTaskEmpty
-            
+            member __.DeadLetterMessage(message) = 
+                message.ReceivedMessage |> receiver.DeadLetterMessageAsync |> Async.AwaitTaskEmpty
+                
+            member __.AbandonMessage(message) = 
+                message.ReceivedMessage |> receiver.AbandonMessageAsync |> Async.AwaitTaskEmpty
+                
+            member __.CompleteMessage(message) = 
+                message.ReceivedMessage |> receiver.CompleteMessageAsync |> Async.AwaitTaskEmpty
+                
             member __.GetNextMessage(timeout) = 
                 async { 
-                    let! message = receiver.ReceiveAsync(timeout) |> Async.AwaitTask
-                    match message with
-                    | null -> return None
-                    | message ->
-                        return Some {   Body = message.GetBody<string>(wireSerializer)
-                                        LockToken = message.LockToken
-                                        Expiry = message.ExpiresAtUtc }
+                    let! msg = receiver.ReceiveMessageAsync(timeout) |> Async.AwaitTask
+                    if isNull msg then return None
+                    else
+                        let expiry =
+                            if msg.ExpiresAt = DateTimeOffset.MinValue then DateTimeOffset.MaxValue
+                            else msg.ExpiresAt
+                        return Some {   Body = msg.Body.ToString()
+                                        ReceivedMessage = msg
+                                        Expiry = expiry }
                 }
     
-    type private SessionisedQueueStream(session : MessageSession, wireSerializer : XmlObjectSerializer) =
-        inherit QueueStream(session, wireSerializer)
+    type private SessionisedQueueStream(sessionReceiver : ServiceBusSessionReceiver) =
+        inherit QueueStream(sessionReceiver :> ServiceBusReceiver)
         interface IActorMessageStream with
-            member __.AbandonSession() = session.CloseAsync() |> Async.AwaitTaskEmpty
-            member __.RenewSessionLock() = session.RenewLockAsync() |> Async.AwaitTaskEmpty
-            member __.SessionId = ActorKey session.SessionId
+            member __.AbandonSession() = sessionReceiver.CloseAsync() |> Async.AwaitTaskEmpty
+            member __.RenewSessionLock() = sessionReceiver.RenewSessionLockAsync() |> Async.AwaitTaskEmpty
+            member __.SessionId = ActorKey sessionReceiver.SessionId
 
     let CreateActorMessageStream (connectionString, queueName, timeout:TimeSpan, wireSerializer) =
-        let queue = QueueClient.CreateFromConnectionString(connectionString, queueName)
+        let client = new ServiceBusClient(connectionString)
         fun () -> 
             async { 
-                let! session = queue.AcceptMessageSessionAsync(timeout) |> Async.AwaitTask |> Async.Catch
-                return
-                    match session with
-                    | Error _
-                    | Result null -> None
-                    | Result session -> Some(SessionisedQueueStream (session, wireSerializer) :> IActorMessageStream)
+                try
+                    use cts = new CancellationTokenSource()
+                    cts.CancelAfter(timeout)
+                    let! session = client.AcceptNextSessionAsync(queueName, null, cts.Token) |> Async.AwaitTask |> Async.Catch
+                    return
+                        match session with
+                        | Error _
+                        | Result null -> None
+                        | Result session -> Some(SessionisedQueueStream (session) :> IActorMessageStream)
+                with _ -> return None
             }
 
     let CreateQueueStream(connectionString, queueName, wireSerializer) =
-        let queueReceiver = MessagingFactory.CreateFromConnectionString(connectionString).CreateMessageReceiver(queueName)
-        QueueStream(queueReceiver, wireSerializer) :> ICloudMessageStream
+        let client = new ServiceBusClient(connectionString)
+        let receiver = client.CreateReceiver(queueName)
+        QueueStream(receiver) :> ICloudMessageStream
 
 [<AutoOpen>]
 module internal Serialization =
@@ -112,7 +115,7 @@ module internal Helpers =
                         | ResilientCloudAgent agent ->
                             // Wait for the response and return it. Timeout is set based on message expiry unless it's too large.
                             let expiryInMs =
-                                match (int ((message.Expiry - DateTime.UtcNow).TotalMilliseconds)) with
+                                match (int ((message.Expiry - DateTimeOffset.UtcNow).TotalMilliseconds)) with
                                 | expiryMs when expiryMs < -1 -> -1
                                 | expiryMs -> expiryMs
 
@@ -142,7 +145,7 @@ module internal Helpers =
 /// Manages dispatching of messages to a service bus queue.
 [<AutoOpen>]
 module internal Dispatch =
-    open Microsoft.ServiceBus.Messaging
+    open Azure.Messaging.ServiceBus
 
     /// Contains configuration details for posting messages to a cloud of agents or actors.
     type MessageDispatcher<'a> = 
@@ -156,25 +159,33 @@ module internal Dispatch =
             QueueName = queueName
             Serializer = JsonSerializer<'a>() }
 
-    let private toBrokeredMessage options sessionId message =
+    let private toServiceBusMessage options sessionId message =
         let payload = message |> options.Serializer.Serialize
-        new BrokeredMessage(payload, SessionId = defaultArg sessionId null)
+        let sbMsg = ServiceBusMessage(BinaryData(payload))
+        match sessionId with
+        | Some id -> sbMsg.SessionId <- id
+        | None -> ()
+        sbMsg
 
     let postMessages (options:MessageDispatcher<'a>) sessionId messages =
-        let toBrokeredMessage = toBrokeredMessage options sessionId
         async { 
             let brokeredMessages = 
                 messages
-                |> Seq.map toBrokeredMessage 
+                |> Seq.map (toServiceBusMessage options sessionId) 
                 |> Seq.toArray
-            
-            let queueClient = QueueClient.CreateFromConnectionString(options.ServiceBusConnectionString, options.QueueName)
-            do! brokeredMessages |> queueClient.SendBatchAsync |> Async.AwaitTaskEmpty
+            let client = new ServiceBusClient(options.ServiceBusConnectionString)
+            let sender = client.CreateSender(options.QueueName)
+            do! sender.SendMessagesAsync(brokeredMessages) |> Async.AwaitTaskEmpty
+            do! sender.DisposeAsync().AsTask() |> Async.AwaitTaskEmpty
+            do! client.DisposeAsync().AsTask() |> Async.AwaitTaskEmpty
         }
 
     let postMessage (options:MessageDispatcher<'a>) sessionId message =
         async { 
-            use brokeredMessage = message |> toBrokeredMessage options sessionId
-            let queueClient = QueueClient.CreateFromConnectionString(options.ServiceBusConnectionString, options.QueueName)
-            do! brokeredMessage |> queueClient.SendAsync |> Async.AwaitTaskEmpty
+            let sbMsg = toServiceBusMessage options sessionId message
+            let client = new ServiceBusClient(options.ServiceBusConnectionString)
+            let sender = client.CreateSender(options.QueueName)
+            do! sender.SendMessageAsync(sbMsg) |> Async.AwaitTaskEmpty
+            do! sender.DisposeAsync().AsTask() |> Async.AwaitTaskEmpty
+            do! client.DisposeAsync().AsTask() |> Async.AwaitTaskEmpty
         }

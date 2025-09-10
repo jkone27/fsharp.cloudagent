@@ -2,27 +2,30 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Name>FSharp.CloudAgent.Tests</Name>
-    <OutputType>Library</OutputType>
-    <TargetFramework>net451</TargetFramework>
-    <DebugType>pdbonly</DebugType>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <DebugType>portable</DebugType>
     <Optimize>true</Optimize>
     <Tailcalls>true</Tailcalls>
     <DocumentationFile>FSharp.CloudAgent.Tests.xml</DocumentationFile>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
-  <Import Project="..\..\.nuget\NuGet.targets" Condition="Exists('..\..\.nuget\NuGet.targets')" />
   <ItemGroup>
     <Compile Include="Helpers.fs" />
     <Compile Include="ProcessBrokeredMessage.fs" />
     <Compile Include="Actors.fs" />
     <Compile Include="AutomaticRetry.fs" />
-    <None Include="paket.references" />
-    <None Include="Script.fsx" />
-    <Content Include="app.config" />
     <ProjectReference Include="..\..\src\FSharp.CloudAgent\FSharp.CloudAgent.fsproj">
       <Name>FSharp.CloudAgent</Name>
-      <Project>{f6147cd2-21e8-41ce-926f-9ab32eab770d}</Project>
       <Private>True</Private>
     </ProjectReference>
   </ItemGroup>
-  <Import Project="..\..\.paket\Paket.Restore.targets" />
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="4.4.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="5.1.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.20.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Unquote" Version="7.0.1" />
+  </ItemGroup>
 </Project>

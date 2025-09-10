@@ -6,10 +6,15 @@ open System
 type Person = { Name : string }
 type Thing = { Name : Person }
 let internal personSerializer = JsonSerializer<Person>()
-let internal createMessage<'a> (serializer:ISerializer<'a>) timeout data =
-    { Body = serializer.Serialize data
-      LockToken = Guid.NewGuid()
-      Expiry = timeout }
+
+let internal createMessage<'a> (serializer:ISerializer<'a>) (timeout:DateTime) data =
+    let expiry = DateTimeOffset(timeout)
+    let payload = serializer.Serialize data
+    { 
+        Body = payload
+        ReceivedMessage = null
+        Expiry = expiry
+    }
 let internal createPersonMessage = createMessage personSerializer (DateTime.UtcNow.AddSeconds 10.)
 let internal processPersonMessage = Helpers.ProcessBrokeredMessage personSerializer
 

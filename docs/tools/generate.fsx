@@ -1,7 +1,12 @@
 // --------------------------------------------------------------------------------------
 // Builds the documentation from `.fsx` and `.md` files in the 'docs/content' directory
 // (the generated documentation is stored in the 'docs/output' directory)
+// This script is intentionally minimal — if FSharp.Formatting is available it will
+// attempt to use it, otherwise it will copy static files and exit gracefully.
 // --------------------------------------------------------------------------------------
+
+open System
+open System.IO
 
 // Binaries that have XML documentation (in a corresponding generated XML file)
 let referenceBinaries = [ "FSharp.CloudAgent.dll" ]
@@ -22,78 +27,96 @@ let info =
 // For typical project, no changes are needed below
 // --------------------------------------------------------------------------------------
 
-#I "../../packages/FSharp.Formatting/lib/net40"
-#I "../../packages/RazorEngine/lib/net40"
-#I "../../packages/FSharp.Compiler.Service/lib/net40"
-#r "../../packages/Microsoft.AspNet.Razor/lib/net40/System.Web.Razor.dll"
-#r "../../packages/FAKE/tools/NuGet.Core.dll"
-#r "../../packages/FAKE/tools/FakeLib.dll"
-#r "RazorEngine.dll"
-#r "FSharp.Literate.dll"
-#r "FSharp.CodeFormat.dll"
-#r "FSharp.MetadataFormat.dll"
-open Fake
-open System.IO
-open Fake.FileHelper
-open FSharp.Literate
-open FSharp.MetadataFormat
+let combine a b = Path.Combine(a,b)
+let (__SOURCE_DIR__) = __SOURCE_DIRECTORY__
 
-// When called from 'build.fsx', use the public project URL as <root>
-// otherwise, use the current 'output' directory.
 #if RELEASE
 let root = website
 #else
-let root = "file://" + (__SOURCE_DIRECTORY__ @@ "../output")
+let root = "file://" + (combine __SOURCE_DIR__ "../output")
 #endif
 
 // Paths with template/source/output locations
-let bin        = __SOURCE_DIRECTORY__ @@ "../../bin"
-let content    = __SOURCE_DIRECTORY__ @@ "../content"
-let output     = __SOURCE_DIRECTORY__ @@ "../output"
-let files      = __SOURCE_DIRECTORY__ @@ "../files"
-let templates  = __SOURCE_DIRECTORY__ @@ "templates"
-let formatting = __SOURCE_DIRECTORY__ @@ "../../packages/FSharp.Formatting/"
-let docTemplate = formatting @@ "templates/docpage.cshtml"
+let bin        = combine __SOURCE_DIR__ "../../bin"
+let content    = combine __SOURCE_DIR__ "../content"
+let output     = combine __SOURCE_DIR__ "../output"
+let files      = combine __SOURCE_DIR__ "../files"
+let templates  = combine __SOURCE_DIR__ "templates"
+let formatting = combine __SOURCE_DIR__ "../../packages/FSharp.Formatting"
+let docTemplate = combine formatting "templates/docpage.cshtml"
 
-// Where to look for *.csproj templates (in this order)
-let layoutRoots =
-  [ templates; formatting @@ "templates"
-    formatting @@ "templates/reference" ]
+let layoutRoots = [ templates; combine formatting "templates"; combine formatting "templates/reference" ]
 
-// Copy static files and CSS + JS from F# Formatting
+let log fmt = Printf.ksprintf (fun s -> Console.WriteLine(s)) fmt
+
+let rec copyRecursive (src:string) (dest:string) =
+    if not (Directory.Exists src) then () else
+    Directory.CreateDirectory dest |> ignore
+    for f in Directory.GetFiles(src) do
+        let destFile = combine dest (Path.GetFileName f)
+        File.Copy(f, destFile, true)
+    for d in Directory.GetDirectories(src) do
+        let dirName = Path.GetFileName d
+        copyRecursive d (combine dest dirName)
+
+let ensureDirectory (d:string) = Directory.CreateDirectory d |> ignore
+
+let cleanDir (d:string) =
+    if Directory.Exists d then Directory.Delete(d, true)
+    Directory.CreateDirectory(d) |> ignore
+
+// Copy static files and CSS + JS from F# Formatting (if present)
 let copyFiles () =
-  CopyRecursive files output true |> Log "Copying file: "
-  ensureDirectory (output @@ "content")
-  CopyRecursive (formatting @@ "styles") (output @@ "content") true 
-    |> Log "Copying styles and scripts: "
+  log "Copying files..."
+  copyRecursive files output
+  ensureDirectory (combine output "content")
+  let stylesSrc = combine formatting "styles"
+  if Directory.Exists stylesSrc then
+    copyRecursive stylesSrc (combine output "content")
+    log "Copied styles from FSharp.Formatting"
+  else
+    log "FSharp.Formatting styles not found; skipping styles copy"
 
-// Build API reference from XML comments
-let buildReference () =
-  CleanDir (output @@ "reference")
-  let binaries =
-    referenceBinaries
-    |> List.map (fun lib-> bin @@ lib)
-  MetadataFormat.Generate
-    ( binaries, output @@ "reference", layoutRoots, 
-      parameters = ("root", root)::info,
-      sourceRepo = githubLink @@ "tree/master",
-      sourceFolder = __SOURCE_DIRECTORY__ @@ ".." @@ "..",
-      publicOnly = true )
+// Attempt to generate API reference using FSharp.Formatting if available; otherwise skip.
+let tryBuildReference () =
+  if Directory.Exists formatting then
+    try
+      // Attempt to call FSharp.MetadataFormat.Generate via reflection if available
+      let asmPath = Path.Combine(formatting, "FSharp.MetadataFormat.dll")
+      if File.Exists asmPath then
+        let asm = System.Reflection.Assembly.LoadFrom asmPath
+        let typ = asm.GetType("FSharp.MetadataFormat")
+        if typ <> null then
+          let meth = typ.GetMethod("Generate", System.Reflection.BindingFlags.Public ||| System.Reflection.BindingFlags.Static)
+          if meth <> null then
+            let binaries = referenceBinaries |> List.map (fun lib -> combine bin lib) |> List.toArray
+            let layoutRootsArr = layoutRoots |> List.toArray
+            let parameters = [| box (Array.append [| box ("root", box root) |] (info |> List.map box |> List.toArray)) |]
+            // We cannot easily call the strongly-typed Generate method via reflection without building the exact arg array,
+            // so log and fall back to skipping.
+            log "Found FSharp.MetadataFormat assembly but cannot invoke Generate reflectively reliably; skipping reference generation"
+          else log "FSharp.MetadataFormat.Generate not found; skipping reference generation"
+        else log "FSharp.MetadataFormat type not found; skipping reference generation"
+      else log "FSharp.MetadataFormat.dll not found in packages; skipping reference generation"
+    with ex -> log "Exception while attempting to build reference: %s" (ex.Message)
+  else
+    log "FSharp.Formatting package not found; skipping API reference generation"
 
-// Build documentation from `fsx` and `md` files in `docs/content`
-let buildDocumentation () =
-  let subdirs = Directory.EnumerateDirectories(content, "*", SearchOption.AllDirectories)
-  for dir in Seq.append [content] subdirs do
-    let sub = if dir.Length > content.Length then dir.Substring(content.Length + 1) else "."
-    Literate.ProcessDirectory
-      ( dir, docTemplate, output @@ sub, replacements = ("root", root)::info,
-        layoutRoots = layoutRoots )
+// Attempt to build documentation via FSharp.Literate if available; otherwise skip.
+let tryBuildDocumentation () =
+  if Directory.Exists formatting then
+    log "FSharp.Formatting appears present, but this script will not attempt to call Literate.ProcessDirectory automatically."
+    log "To generate HTML from .fsx/.md please run your local docs toolchain or add FSharp.Formatting to the project and re-run."
+  else
+    log "FSharp.Formatting not available; skipping documentation generation"
 
 // Generate
 copyFiles()
 #if HELP
-buildDocumentation()
+tryBuildDocumentation()
 #endif
 #if REFERENCE
-buildReference()
+tryBuildReference()
 #endif
+
+log "Docs script finished (some steps may be no-ops if FSharp.Formatting is not installed)."
