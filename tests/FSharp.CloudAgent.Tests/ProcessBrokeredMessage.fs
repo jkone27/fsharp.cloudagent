@@ -16,7 +16,7 @@ let ``Passes deserialized object into agent``() =
             |> processPersonMessage agent
             |> Async.RunSynchronously
     Async.Sleep(100) |> Async.RunSynchronously
-    Assert.AreEqual({ Person.Name = "Isaac" }, !person)
+    Assert.Equals({ Person.Name = "Isaac" }, !person)
 
 [<Test>]
 let ``Immediately returns completed for BasicCloudAgent``() =
@@ -25,7 +25,7 @@ let ``Immediately returns completed for BasicCloudAgent``() =
                  |> createPersonMessage
                  |> processPersonMessage agent
                  |> Async.RunSynchronously
-    Assert.AreEqual(Completed, result)
+    Assert.Equals(Completed, result)
 
 [<Test>]
 let ``Serialization failure immediately returns Failed``() =
@@ -35,7 +35,7 @@ let ``Serialization failure immediately returns Failed``() =
         createMessage serializer (DateTime.UtcNow.AddSeconds 10.) { Thing.Name = { Person.Name = "Isaac" } }
 
     let result = message |> processPersonMessage agent |> Async.RunSynchronously
-    Assert.AreEqual(Failed, result)
+    Assert.Equals(Failed, result)
 
 [<Test>]
 let ``Returns result from Resilient agent``() =
@@ -44,7 +44,7 @@ let ``Returns result from Resilient agent``() =
                  |> createPersonMessage
                  |> processPersonMessage agent
                  |> Async.RunSynchronously
-    Assert.AreEqual(Abandoned, result)
+    Assert.Equals(Abandoned, result)
 
 [<Test>]
 let ``No result from Resilient agent returns Failed``() =
@@ -53,7 +53,7 @@ let ``No result from Resilient agent returns Failed``() =
                  |> createMessage personSerializer (DateTime.UtcNow.AddSeconds 2.)
                  |> processPersonMessage agent
                  |> Async.RunSynchronously
-    Assert.AreEqual(Failed, result)
+    Assert.Equals(Failed, result)
 
 [<Test>]
 let ``Exception from Resilient agent returns Failed``() =
@@ -62,7 +62,7 @@ let ``Exception from Resilient agent returns Failed``() =
                  |> createMessage personSerializer (DateTime.UtcNow.AddSeconds 2.)
                  |> processPersonMessage agent
                  |> Async.RunSynchronously
-    Assert.AreEqual(Failed, result)
+    Assert.Equals(Failed, result)
 
 [<Test>]
 let ``Message with maximum expiry time is correctly processed``() =
@@ -71,4 +71,4 @@ let ``Message with maximum expiry time is correctly processed``() =
                  |> createMessage personSerializer DateTime.MaxValue
                  |> processPersonMessage agent
                  |> Async.RunSynchronously
-    Assert.AreEqual(Completed, result)
+    Assert.Equals(Completed, result)
