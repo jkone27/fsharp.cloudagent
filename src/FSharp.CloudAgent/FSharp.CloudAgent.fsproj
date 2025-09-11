@@ -11,6 +11,18 @@
     <Tailcalls>true</Tailcalls>
     <OutputPath>..\..\bin\</OutputPath>
     <DocumentationFile>FSharp.CloudAgent.XML</DocumentationFile>
+    <!-- NuGet metadata -->
+    <Authors>isaacabraham,jkone27</Authors>
+    <Description>Cloud Agent library for F# - distributed actor and messaging patterns.</Description>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>http://isaacabraham.github.io/FSharp.CloudAgent</PackageProjectUrl>
+    <PackageIconUrl>http://isaacabraham.github.io/FSharp.CloudAgent/img/logo.png</PackageIconUrl>
+    <RepositoryUrl>https://github.com/isaacabraham/FSharp.CloudAgent</RepositoryUrl>
+    <PackageTags>fsharp cloud agent messaging distributed actors</PackageTags>
+    <Copyright>Copyright 2014</Copyright>
+    <PackageReleaseNotes>See RELEASE_NOTES.md for details.</PackageReleaseNotes>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Types.fs" />
@@ -18,6 +30,9 @@
     <Compile Include="Actors.fs" />
     <Compile Include="ConnectionFactory.fs" />
     <Compile Include="CustomAssemblyPermissions.fs" />
+  <!-- Include LICENSE and README in NuGet package -->
+  <None Include="..\..\LICENSE.txt" Pack="true" PackagePath="" />
+  <None Include="..\..\README.md" Pack="true" PackagePath="" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.20.1" />

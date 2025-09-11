@@ -137,7 +137,7 @@ let StartListeningWithWireSerializer<'a>(cloudConnection, createAgentFunc, wireS
 /// </summary>
 /// <param name="cloudConnection">The connection to the Azure service bus that will provide messages.</param>
 /// <param name="createAgentFunc">A function that can create a single F# Agent to handle messages.</param>
-let StartListening<'a>(cloudConnection, createAgentFunc) =
+let StartListening<'a>(cloudConnection, createAgentFunc: ActorKey -> CloudAgentKind<'a>) =
     let wireSerializer = new DataContractSerializer(typeof<string>)
     StartListeningWithWireSerializer(cloudConnection, createAgentFunc, wireSerializer)
 

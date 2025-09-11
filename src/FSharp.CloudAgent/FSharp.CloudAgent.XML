@@ -194,7 +194,7 @@
  Posts a message to a pool of workers.
 </summary>
 </member>
-<member name="M:FSharp.CloudAgent.ConnectionFactory.StartListening``1(FSharp.CloudAgent.Connections.CloudConnection,Microsoft.FSharp.Core.FSharpFunc{FSharp.CloudAgent.ActorKey,FSharp.CloudAgent.Messaging.CloudAgentKind{System.Object}})">
+<member name="M:FSharp.CloudAgent.ConnectionFactory.StartListening``1(FSharp.CloudAgent.Connections.CloudConnection,Microsoft.FSharp.Core.FSharpFunc{FSharp.CloudAgent.ActorKey,FSharp.CloudAgent.Messaging.CloudAgentKind{``0}})">
  <summary>
  Starts listening to Azure for messages that are handled by agents.
  </summary>
