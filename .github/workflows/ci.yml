@@ -1,14 +1,18 @@
+
 name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ master ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ master ]
 
 jobs:
-  build:
+  ci:
+    name: Build, Test, and Docs
     runs-on: ubuntu-latest
+    outputs:
+      docs-path: ${{ steps.docs.outputs.docs-path }}
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET
@@ -28,8 +32,50 @@ jobs:
           name: test-results
           path: |
             **/TestResults/*.trx
-      - name: Publish nuget package
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      - name: Build docs
+        id: docs
         run: |
-          dotnet pack src/FSharp.CloudAgent -c Release -o ./nupkg --no-build
-          dotnet nuget push ./nupkg/*.nupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
+          dotnet tool restore
+          dotnet fsdocs build
+          echo "docs-path=output" >> $GITHUB_OUTPUT
+
+  publish-docs:
+    name: Publish Docs to GitHub Pages
+    needs: ci
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build docs
+        run: |
+          dotnet tool restore
+          dotnet fsdocs build
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: output
+
+  publish-nuget:
+    name: Publish NuGet Package
+    needs: ci
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore
+        run: dotnet restore
+      - name: Build
+        run: dotnet build -c Release --no-restore
+      - name: Pack
+        run: dotnet pack src/FSharp.CloudAgent -c Release -o ./nupkg --no-build
+      - name: Publish
+        run: dotnet nuget push ./nupkg/*.nupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
