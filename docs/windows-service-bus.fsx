@@ -1,3 +1,10 @@
+(***
+---
+title: About Windows Service Bus
+description: Guide to using Windows Service Bus with FSharp.CloudAgent.
+category: Integrations
+---
+***)
 (**
 About Windows Service Bus
 =======================

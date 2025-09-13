@@ -1,3 +1,10 @@
+(***
+---
+title: Handling Errors
+description: Error handling strategies for FSharp.CloudAgent agents.
+category: Concepts
+---
+***)
 (**
 Handling Errors
 ===============

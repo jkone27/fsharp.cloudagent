@@ -1,3 +1,14 @@
+(**
+Creating a simple distributable Agent is as simple as creating a regular agent, wrapping it
+in a generator function and then binding that function to a service bus queue.
+*)
+(***
+---
+title: Tutorial
+description: Step-by-step guide to using FSharp.CloudAgent.
+category: Getting Started
+---
+***)
 (*** hide ***) 
 #r @"..\..\bin\FSharp.CloudAgent.dll"
 

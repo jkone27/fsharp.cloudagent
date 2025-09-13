@@ -12,18 +12,43 @@ open System.Threading
 module internal Streams = 
     open FSharp.CloudAgent.Messaging
 
-    /// Represents a stream of cloud messages.
+    /// <summary>
+    /// Represents a stream of cloud messages for processing by agents.
+    /// </summary>
     type ICloudMessageStream = 
+        /// <summary>
+        /// Gets the next message from the stream, waiting up to the specified timeout.
+        /// </summary>
         abstract GetNextMessage : TimeSpan -> Async<SimpleCloudMessage option>
+        /// <summary>
+        /// Marks a message as completed.
+        /// </summary>
         abstract CompleteMessage : SimpleCloudMessage -> Async<unit>
+        /// <summary>
+        /// Abandons a message, returning it to the queue.
+        /// </summary>
         abstract AbandonMessage : SimpleCloudMessage -> Async<unit>
+        /// <summary>
+        /// Dead-letters a message, moving it to the dead letter queue.
+        /// </summary>
         abstract DeadLetterMessage : SimpleCloudMessage -> Async<unit>
 
-    /// Represents a stream of messages for a specific actor.
+    /// <summary>
+    /// Represents a stream of messages for a specific actor, with session management.
+    /// </summary>
     type IActorMessageStream = 
         inherit ICloudMessageStream
+        /// <summary>
+        /// Renews the session lock for the actor.
+        /// </summary>
         abstract RenewSessionLock : unit -> Async<unit>
+        /// <summary>
+        /// Abandons the current session.
+        /// </summary>
         abstract AbandonSession : unit -> Async<unit>
+        /// <summary>
+        /// Gets the session ID (actor key).
+        /// </summary>
         abstract SessionId : ActorKey
 
     type private QueueStream(receiver : ServiceBusReceiver) =

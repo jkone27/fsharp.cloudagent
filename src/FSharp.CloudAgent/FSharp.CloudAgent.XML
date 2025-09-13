@@ -3,14 +3,14 @@
 <assembly><name>FSharp.CloudAgent</name></assembly>
 <members>
 <member name="T:FSharp.CloudAgent.ActorKey.ActorKey">
-<summary>
- Represents a unique key to identify an agent / actor.
-</summary>
+ <summary>
+ The key value for the actor.
+ </summary>
 </member>
 <member name="T:FSharp.CloudAgent.ActorKey">
-<summary>
- Represents a unique key to identify an agent / actor.
-</summary>
+ <summary>
+ Represents a unique key to identify an agent or actor in the cloud agent system.
+ </summary>
 </member>
 <member name="T:FSharp.CloudAgent.Connections.CloudConnection.ActorCloudConnection">
 <summary>
@@ -18,34 +18,44 @@
 </summary>
 </member>
 <member name="T:FSharp.CloudAgent.Connections.CloudConnection.WorkerCloudConnection">
-<summary>
+ <summary>
  A generic worker cloud that can run workloads in parallel.
-</summary>
+ </summary>
 </member>
 <member name="T:FSharp.CloudAgent.Connections.CloudConnection">
-<summary>
+ <summary>
  Represents a connection to a pool of agents.
-</summary>
+ </summary>
 </member>
 <member name="T:FSharp.CloudAgent.Connections.Queue.Queue">
-<summary>
- Represents a service bus queue.
-</summary>
+ <summary>
+ The name of the queue.
+ </summary>
 </member>
 <member name="T:FSharp.CloudAgent.Connections.Queue">
-<summary>
+ <summary>
  Represents a service bus queue.
-</summary>
+ </summary>
 </member>
 <member name="T:FSharp.CloudAgent.Connections.ServiceBusConnection.ServiceBusConnection">
-<summary>
- Represents details of a connection to an Azure Service Bus.
-</summary>
+ <summary>
+ The connection string for the Azure Service Bus.
+ </summary>
 </member>
 <member name="T:FSharp.CloudAgent.Connections.ServiceBusConnection">
-<summary>
+ <summary>
  Represents details of a connection to an Azure Service Bus.
-</summary>
+ </summary>
+</member>
+<member name="M:FSharp.CloudAgent.Async.|Result|Error|``1(Microsoft.FSharp.Core.FSharpChoice{``0,System.Exception})">
+ <summary>
+ Active pattern for handling Choice results as Result or Error.
+ </summary>
+</member>
+<member name="M:FSharp.CloudAgent.Async.AwaitTaskEmpty(System.Threading.Tasks.Task)">
+ <summary>
+ Awaits a Task that does not return a value, converting it to an F# async workflow.
+ </summary>
 </member>
 <member name="T:FSharp.CloudAgent.Messaging.SimpleCloudMessage">
 <summary>
@@ -134,45 +144,80 @@
  A serializer using Newtonsoft&apos;s JSON .NET serializer.
 </summary>
 </member>
+<member name="P:FSharp.CloudAgent.Messaging.Streams.IActorMessageStream.SessionId">
+ <summary>
+ Gets the session ID (actor key).
+ </summary>
+</member>
+<member name="M:FSharp.CloudAgent.Messaging.Streams.IActorMessageStream.RenewSessionLock">
+ <summary>
+ Renews the session lock for the actor.
+ </summary>
+</member>
+<member name="M:FSharp.CloudAgent.Messaging.Streams.IActorMessageStream.AbandonSession">
+ <summary>
+ Abandons the current session.
+ </summary>
+</member>
 <member name="T:FSharp.CloudAgent.Messaging.Streams.IActorMessageStream">
-<summary>
- Represents a stream of messages for a specific actor.
-</summary>
+ <summary>
+ Represents a stream of messages for a specific actor, with session management.
+ </summary>
+</member>
+<member name="M:FSharp.CloudAgent.Messaging.Streams.ICloudMessageStream.GetNextMessage(System.TimeSpan)">
+ <summary>
+ Gets the next message from the stream, waiting up to the specified timeout.
+ </summary>
+</member>
+<member name="M:FSharp.CloudAgent.Messaging.Streams.ICloudMessageStream.DeadLetterMessage(FSharp.CloudAgent.Messaging.SimpleCloudMessage)">
+ <summary>
+ Dead-letters a message, moving it to the dead letter queue.
+ </summary>
+</member>
+<member name="M:FSharp.CloudAgent.Messaging.Streams.ICloudMessageStream.CompleteMessage(FSharp.CloudAgent.Messaging.SimpleCloudMessage)">
+ <summary>
+ Marks a message as completed.
+ </summary>
+</member>
+<member name="M:FSharp.CloudAgent.Messaging.Streams.ICloudMessageStream.AbandonMessage(FSharp.CloudAgent.Messaging.SimpleCloudMessage)">
+ <summary>
+ Abandons a message, returning it to the queue.
+ </summary>
 </member>
 <member name="T:FSharp.CloudAgent.Messaging.Streams.ICloudMessageStream">
-<summary>
- Represents a stream of cloud messages.
-</summary>
+ <summary>
+ Represents a stream of cloud messages for processing by agents.
+ </summary>
 </member>
 <member name="M:FSharp.CloudAgent.Actors.IActorStore`1.RemoveActor(FSharp.CloudAgent.ActorKey)">
-<summary>
+ <summary>
  Tells the store that an actor is no longer required and can be safely removed.
-</summary>
+ </summary>
 </member>
 <member name="M:FSharp.CloudAgent.Actors.IActorStore`1.GetActor(FSharp.CloudAgent.ActorKey)">
-<summary>
+ <summary>
  Requests an actor for a particular key.
-</summary>
+ </summary>
 </member>
 <member name="T:FSharp.CloudAgent.Actors.IActorStore`1">
-<summary>
- Manages lifetime of actors.
-</summary>
+ <summary>
+ Manages lifetime of actors in the cloud agent system.
+ </summary>
 </member>
 <member name="T:FSharp.CloudAgent.Actors.Factory.AgentSelectorFunc`1">
-<summary>
- Selects an agent to consume a message.
-</summary>
+ <summary>
+ Function type for selecting an agent to consume a message.
+ </summary>
 </member>
 <member name="M:FSharp.CloudAgent.Actors.Factory.CreateAgentSelector``1(System.Int32,Microsoft.FSharp.Core.FSharpFunc{FSharp.CloudAgent.ActorKey,FSharp.CloudAgent.Messaging.CloudAgentKind{``0}})">
-<summary>
+ <summary>
  Generates a pool of CloudAgents of a specific size that can be used to select an agent when required.
-</summary>
+ </summary>
 </member>
 <member name="M:FSharp.CloudAgent.Actors.Factory.CreateActorStore``1(Microsoft.FSharp.Core.FSharpFunc{FSharp.CloudAgent.ActorKey,FSharp.CloudAgent.Messaging.CloudAgentKind{``0}})">
-<summary>
- Creates an IActorStore that can add / retrieve / remove agents in a threadsafe manner, using the supplied function to create new agents on demand.
-</summary>
+ <summary>
+ Creates an IActorStore that can add, retrieve, and remove agents in a threadsafe manner, using the supplied function to create new agents on demand.
+ </summary>
 </member>
 <member name="M:FSharp.CloudAgent.ConnectionFactory.SendToActorPoolBatch``1(FSharp.CloudAgent.Connections.CloudConnection,FSharp.CloudAgent.ActorKey,System.Collections.Generic.IEnumerable{``0})">
 <summary>
