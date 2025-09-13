@@ -1,3 +1,10 @@
+(***
+---
+title: Agent Paradigms
+description: Explanation of distributed agent models in FSharp.CloudAgent.
+category: Concepts
+---
+***)
 (**
 Agent Paradigms
 ===============

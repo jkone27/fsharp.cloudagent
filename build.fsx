@@ -1,220 +1,95 @@
-// --------------------------------------------------------------------------------------
-// FAKE build script
-// --------------------------------------------------------------------------------------
+#if !FAKE
+printfn "This build script is intended to be run with 'fake run build.fsx'."
+printfn "Install fake-cli as a dotnet global tool: dotnet tool install -g fake-cli"
+printfn "Run: fake run build.fsx [target]"
+System.Environment.Exit(0)
+#else
 
-#r @"packages/FAKE/tools/NuGet.Core.dll"
-open Fake.Testing
-#r @"packages/FAKE/tools/FakeLib.dll"
-open Fake
-open Fake.Git
-open Fake.AssemblyInfoFile
-open Fake.ReleaseNotesHelper
+#r "nuget: Fake.Core.Target, 6.73.0"
+#r "nuget: Fake.DotNet.Cli, 6.73.0"
+#r "nuget: Fake.IO.FileSystem, 6.73.0"
+#r "nuget: Fake.IO.Globbing, 6.73.0"
+#r "nuget: Fake.DotNet.AssemblyInfoFile, 6.73.0"
+#r "nuget: Fake.Core.ReleaseNotes, 6.73.0"
+
 open System
-#if MONO
-#else
-#load "packages/SourceLink.Fake/Tools/Fake.fsx"
-open SourceLink
-#endif
+open Fake.Core
+open Fake.Core.TargetOperators
+open Fake.DotNet
+open Fake.IO
+open Fake.IO.Globbing.Operators
+open Fake.DotNet.AssemblyInfoFile
+open Fake.Core.ReleaseNotes
 
+// Basic project configuration
 let project = "FSharp.CloudAgent"
-let summary = "Allows the use of distributed F# Agents in Azure."
-let description = "FSharp.CloudAgent provides the capability to run standard F# Agents on top of Azure to allow massively distributed processing of workloads in a resilient manner using Azure Service Bus, either as pools of simple workers or actors."
-let authors = [ "Isaac Abraham" ]
-let tags = "f# agent actor azure service-bus"
-let solutionFile  = "FSharp.CloudAgent.sln"
-let testAssemblies = "tests/**/bin/Release/net451/*Tests*.dll"
-let gitHome = "https://github.com/isaacabraham"
-let gitName = "FSharp.CloudAgent"
-let gitRaw = environVarOrDefault "gitRaw" "https://raw.github.com/isaacabraham"
-Environment.CurrentDirectory <- __SOURCE_DIRECTORY__
+let solution = "FSharp.CloudAgent.sln"
+let releaseNotesFile = "RELEASE_NOTES.md"
 
+// Helpers
+let configuration = Environment.environVarOrDefault "CONFIGURATION" "Release"
 
+// Load release notes (optional)
+let release =
+    if System.IO.File.Exists releaseNotesFile then
+        ReleaseNotes.load releaseNotesFile
+    else
+        { NugetVersion = "0.0.0"; AssemblyVersion = "0.0.0.0"; Notes = [] }
 
-
-
-// Read additional information from the release notes document
-let release = parseReleaseNotes (IO.File.ReadAllLines "RELEASE_NOTES.md")
-
-let genFSAssemblyInfo (projectPath) =
-    let projectName = System.IO.Path.GetFileNameWithoutExtension(projectPath)
-    let basePath = "src/" + projectName
-    let fileName = basePath + "/AssemblyInfo.fs"
-    CreateFSharpAssemblyInfo fileName
-      [ Attribute.Title (projectName)
-        Attribute.Product project
-        Attribute.Description summary
-        Attribute.Version release.AssemblyVersion
-        Attribute.FileVersion release.AssemblyVersion ]
-
-let genCSAssemblyInfo (projectPath) =
-    let projectName = System.IO.Path.GetFileNameWithoutExtension(projectPath)
-    let basePath = "src/" + projectName + "/Properties"
-    let fileName = basePath + "/AssemblyInfo.cs"
-    CreateCSharpAssemblyInfo fileName
-      [ Attribute.Title (projectName)
-        Attribute.Product project
-        Attribute.Description summary
-        Attribute.Version release.AssemblyVersion
-        Attribute.FileVersion release.AssemblyVersion ]
-
-// Generate assembly info files with the right version & up-to-date information
-Target "AssemblyInfo" (fun _ ->
-  let fsProjs =  !! "src/**/*.fsproj"
-  let csProjs = !! "src/**/*.csproj"
-  fsProjs |> Seq.iter genFSAssemblyInfo
-  csProjs |> Seq.iter genCSAssemblyInfo
+// Targets
+Target.create "Clean" (fun _ ->
+    Shell.cleanDirs ["bin"; "temp"; "docs/output"]
 )
 
-// --------------------------------------------------------------------------------------
-// Clean build results & restore NuGet packages
-
-Target "RestorePackages" RestorePackages
-
-Target "Clean" (fun _ ->
-    CleanDirs ["bin"; "temp"]
+Target.create "Restore" (fun _ ->
+    DotNet.restore (fun opts -> { opts with Common = { opts.Common with WorkingDirectory = __SOURCE_DIRECTORY__ } }) solution
 )
 
-Target "CleanDocs" (fun _ ->
-    CleanDirs ["docs/output"]
-)
-
-// --------------------------------------------------------------------------------------
-// Build library & test project
-
-Target "Build" (fun _ ->
-    !! solutionFile
-    |> MSBuildRelease "" "Rebuild"
-    |> ignore
-)
-
-// --------------------------------------------------------------------------------------
-// Run the unit tests using test runner
-
-Target "RunTests" (fun _ ->
-        !! testAssemblies
-        |> NUnit3 (fun p ->
-            { p with
-                ShadowCopy = true
-                TimeOut = TimeSpan.FromMinutes 20. })
-)
-
-#if MONO
-#else
-// --------------------------------------------------------------------------------------
-// SourceLink allows Source Indexing on the PDB generated by the compiler, this allows
-// the ability to step through the source code of external libraries https://github.com/ctaggart/SourceLink
-
-Target "SourceLink" (fun _ ->
-    let baseUrl = sprintf "%s/%s/{0}/%%var2%%" gitRaw (project.ToLower())
-    use repo = new GitRepo(__SOURCE_DIRECTORY__)
-    !! "src/**/*.fsproj"
-    |> Seq.iter (fun f ->
-        let proj = VsProj.LoadRelease f
-        logfn "source linking %s" proj.OutputFilePdb
-        let files = proj.Compiles -- "**/AssemblyInfo.fs"
-        repo.VerifyChecksums files
-        proj.VerifyPdbChecksums files
-        proj.CreateSrcSrv baseUrl repo.Revision (repo.Paths files)
-        Pdbstr.exec proj.OutputFilePdb proj.OutputFilePdbSrcSrv
+Target.create "AssemblyInfo" (fun _ ->
+    let fsprojs = !! ("src/**/*.fsproj") // glob projects
+    fsprojs
+    |> Seq.iter (fun proj ->
+        let projName = System.IO.Path.GetFileNameWithoutExtension(proj)
+        let basePath = System.IO.Path.Combine("src", projName)
+        let fileName = System.IO.Path.Combine(basePath, "AssemblyInfo.fs")
+        CreateFSharpAssemblyInfo fileName
+          [ AssemblyInfo.Title projName
+            AssemblyInfo.Product project
+            AssemblyInfo.Description "FSharp.CloudAgent"
+            AssemblyInfo.Version release.AssemblyVersion
+            AssemblyInfo.FileVersion release.AssemblyVersion ]
     )
 )
-#endif
 
-// --------------------------------------------------------------------------------------
-// Build a NuGet package
-
-let asDependency name = name, GetPackageVersion "packages" name
-
-Target "NuGet" (fun _ ->
-    NuGet (fun p ->
-        { p with
-            Authors = authors
-            Project = project
-            Summary = summary
-            Description = description
-            Version = release.NugetVersion
-            ReleaseNotes = String.Join(Environment.NewLine, release.Notes)
-            Tags = tags
-            OutputPath = "bin"
-            AccessKey = getBuildParamOrDefault "nugetkey" ""
-            Publish = hasBuildParam "nugetkey"
-            Dependencies = [ "WindowsAzure.ServiceBus"
-                             "Newtonsoft.Json" ] |> List.map asDependency })
-        ("nuget/" + project + ".nuspec")
+Target.create "Build" (fun _ ->
+    DotNet.build (fun opts -> { opts with Configuration = DotNet.BuildConfiguration.fromString configuration }) solution
 )
 
-// --------------------------------------------------------------------------------------
-// Generate the documentation
-
-Target "GenerateReferenceDocs" (fun _ ->
-    if not <| executeFSIWithArgs "docs/tools" "generate.fsx" ["--define:RELEASE"; "--define:REFERENCE"] [] then
-      failwith "generating reference documentation failed"
+Target.create "Test" (fun _ ->
+    // Run all test projects using dotnet test
+    !! "tests/**/*.fsproj"
+    |> Seq.iter (fun proj -> DotNet.test (fun opts -> { opts with Configuration = DotNet.BuildConfiguration.fromString configuration }) proj)
 )
 
-Target "GenerateHelp" (fun _ ->
-    if not <| executeFSIWithArgs "docs/tools" "generate.fsx" ["--define:RELEASE"; "--define:HELP"] [] then
-      failwith "generating help documentation failed"
+Target.create "GenerateDocs" (fun _ ->
+    // Requires fake-cli or dotnet-fsi availability for executing the F# script. This step is optional.
+    let result = Shell.Exec("fake", "run docs/tools/generate.fsx GenerateDocs")
+    if result <> 0 then failwith "Docs generation failed"
 )
 
-Target "GenerateDocs" DoNothing
+Target.create "All" ignore
 
-// --------------------------------------------------------------------------------------
-// Release Scripts
-
-Target "ReleaseDocs" (fun _ ->
-    let tempDocsDir = "temp/gh-pages"
-    CleanDir tempDocsDir
-    Repository.cloneSingleBranch "" (gitHome + "/" + gitName + ".git") "gh-pages" tempDocsDir
-
-    CopyRecursive "docs/output" tempDocsDir true |> tracefn "%A"
-    StageAll tempDocsDir
-    Commit tempDocsDir (sprintf "Update generated documentation for version %s" release.NugetVersion)
-    Branches.push tempDocsDir
-)
-
-Target "Release" (fun _ ->
-    StageAll ""
-    Commit "" (sprintf "Bump version to %s" release.NugetVersion)
-    Branches.push ""
-
-    Branches.tag "" release.NugetVersion
-    Branches.pushTag "" "origin" release.NugetVersion
-)
-
-Target "BuildPackage" DoNothing
-
-// --------------------------------------------------------------------------------------
-// Run all targets by default. Invoke 'build <Target>' to override
-
-Target "All" DoNothing
+// Define dependencies
+open Fake.Core.TargetOperators
 
 "Clean"
-  ==> "RestorePackages"
+  ==> "Restore"
   ==> "AssemblyInfo"
   ==> "Build"
-  ==> "RunTests"
-  =?> ("GenerateReferenceDocs",isLocalBuild && not isMono)
-  =?> ("GenerateDocs",isLocalBuild && not isMono)
+  ==> "Test"
   ==> "All"
-  =?> ("ReleaseDocs",isLocalBuild && not isMono)
 
-"All" 
-#if MONO
-#else
-  =?> ("SourceLink", Pdbstr.tryFind().IsSome )
+// Default target
+Target.runOrDefault "All"
+
 #endif
-  ==> "NuGet"
-  ==> "BuildPackage"
-
-"CleanDocs"
-  ==> "GenerateHelp"
-  ==> "GenerateReferenceDocs"
-  ==> "GenerateDocs"
-
-"ReleaseDocs"
-  ==> "Release"
-
-"BuildPackage"
-  ==> "Release"
-
-RunTargetOrDefault "All"

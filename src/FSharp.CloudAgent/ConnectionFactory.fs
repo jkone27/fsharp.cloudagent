@@ -46,9 +46,9 @@ module internal Actors =
                     | _, Result(Some message) -> 
                         let! result = processBrokeredMessage message
                         do! match result with
-                            | Completed -> session.CompleteMessage(message.LockToken)
-                            | Failed -> session.AbandonMessage(message.LockToken)
-                            | Abandoned -> session.DeadLetterMessage(message.LockToken)
+                            | Completed -> session.CompleteMessage(message)
+                            | Failed -> session.AbandonMessage(message)
+                            | Abandoned -> session.DeadLetterMessage(message)
                         let! renewal = session.RenewSessionLock() |> Async.Catch
                         match renewal with
                         | Result() -> return! continueProcessingStream()
@@ -94,16 +94,16 @@ module internal Workers =
                 | true ->
                     // If a cancellation request has occurred, don't process the last received message
                     // just throw it back to the message provider.
-                    messageStream.AbandonMessage message.LockToken |> ignore
+                    messageStream.AbandonMessage message |> ignore
                 | false ->
                     // Place the following code in its own async block so it works in the background and we can
                     // get another message for another agent in parallel.
                     async {
                         let! processingResult = processBrokeredMessage agent message
                         match processingResult with
-                        | Completed -> do! messageStream.CompleteMessage(message.LockToken)
-                        | Failed -> do! messageStream.AbandonMessage(message.LockToken)
-                        | Abandoned -> do! messageStream.DeadLetterMessage(message.LockToken)
+                        | Completed -> do! messageStream.CompleteMessage(message)
+                        | Failed -> do! messageStream.AbandonMessage(message)
+                        | Abandoned -> do! messageStream.DeadLetterMessage(message)
                     }
                     |> Async.Start
         }
@@ -137,7 +137,7 @@ let StartListeningWithWireSerializer<'a>(cloudConnection, createAgentFunc, wireS
 /// </summary>
 /// <param name="cloudConnection">The connection to the Azure service bus that will provide messages.</param>
 /// <param name="createAgentFunc">A function that can create a single F# Agent to handle messages.</param>
-let StartListening<'a>(cloudConnection, createAgentFunc) =
+let StartListening<'a>(cloudConnection, createAgentFunc: ActorKey -> CloudAgentKind<'a>) =
     let wireSerializer = new DataContractSerializer(typeof<string>)
     StartListeningWithWireSerializer(cloudConnection, createAgentFunc, wireSerializer)
 

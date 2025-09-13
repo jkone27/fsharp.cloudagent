@@ -1,3 +1,10 @@
+(***
+---
+title: About Azure Service Bus
+description: Quick guide to Azure Service Bus for FSharp.CloudAgent.
+category: Integrations
+---
+***)
 (**
 About Azure Service Bus
 =======================

@@ -1,8 +1,12 @@
 ﻿namespace FSharp.CloudAgent
 
-/// Represents a unique key to identify an agent / actor.
+/// <summary>
+/// Represents a unique key to identify an agent or actor in the cloud agent system.
+/// </summary>
 type ActorKey = 
-    /// Represents a unique key to identify an agent / actor.
+    /// <summary>
+    /// The key value for the actor.
+    /// </summary>
     | ActorKey of string
 
 [<AutoOpen>]
@@ -10,6 +14,9 @@ module internal Async =
     open System
     open System.Threading.Tasks
     
+    /// <summary>
+    /// Awaits a Task that does not return a value, converting it to an F# async workflow.
+    /// </summary>
     let AwaitTaskEmpty(task : Task) = 
         Async.FromContinuations(fun (onSuccess, onException, onCancellation) -> 
             task.ContinueWith(fun t -> 
@@ -18,6 +25,9 @@ module internal Async =
                 else onCancellation (System.OperationCanceledException()))
             |> ignore)
     
+    /// <summary>
+    /// Active pattern for handling Choice results as Result or Error.
+    /// </summary>
     let (|Result|Error|) =
         function
         | Choice1Of2 result -> Result result
@@ -25,25 +35,39 @@ module internal Async =
 
 namespace FSharp.CloudAgent.Connections
 
+/// <summary>
 /// Represents details of a connection to an Azure Service Bus.
+/// </summary>
 type ServiceBusConnection = 
-    /// Represents details of a connection to an Azure Service Bus.
+    /// <summary>
+    /// The connection string for the Azure Service Bus.
+    /// </summary>
     | ServiceBusConnection of string
 
+/// <summary>
 /// Represents a service bus queue.
+/// </summary>
 type Queue = 
-    /// Represents a service bus queue.
+    /// <summary>
+    /// The name of the queue.
+    /// </summary>
     | Queue of string
 
+/// <summary>
 /// Represents a connection to a pool of agents.
+/// </summary>
 type CloudConnection = 
+    /// <summary>
     /// A generic worker cloud that can run workloads in parallel.
+    /// </summary>
     | WorkerCloudConnection of ServiceBusConnection * Queue
     /// An actor-based cloud that can run workloads in parallel whilst ensuring sequential workloads per-actor.
     | ActorCloudConnection of ServiceBusConnection * Queue
+
 namespace FSharp.CloudAgent.Messaging
 
 open System
+open Azure.Messaging.ServiceBus
 
 /// The different completion statuses a CloudMessage can have.
 type MessageProcessedStatus = 
@@ -64,5 +88,5 @@ type CloudAgentKind<'a> =
 /// Contains the raw data of a cloud message.
 type internal SimpleCloudMessage = 
     { Body : string
-      LockToken : Guid
-      Expiry : DateTime }
+      ReceivedMessage : ServiceBusReceivedMessage
+      Expiry : DateTimeOffset }

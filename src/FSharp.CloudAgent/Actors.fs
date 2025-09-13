@@ -1,17 +1,21 @@
-﻿namespace FSharp.CloudAgent.Actors
+namespace FSharp.CloudAgent.Actors
 
 open FSharp.CloudAgent
 open FSharp.CloudAgent.Messaging
 open System
 open System.Collections.Generic
 
-/// Manages lifetime of actors.
+/// <summary>
+/// Manages lifetime of actors in the cloud agent system.
+/// </summary>
 type internal IActorStore<'a> = 
-    
+    /// <summary>
     /// Requests an actor for a particular key.
+    /// </summary>
     abstract GetActor : ActorKey -> CloudAgentKind<'a>
-    
+    /// <summary>
     /// Tells the store that an actor is no longer required and can be safely removed.
+    /// </summary>
     abstract RemoveActor : ActorKey -> unit
 
 // Manages per-session actors.
@@ -56,17 +60,23 @@ module internal Factory =
         actorStore.Start()
         actorStore
     
-    /// Creates an IActorStore that can add / retrieve / remove agents in a threadsafe manner, using the supplied function to create new agents on demand.
+    /// <summary>
+    /// Creates an IActorStore that can add, retrieve, and remove agents in a threadsafe manner, using the supplied function to create new agents on demand.
+    /// </summary>
     let CreateActorStore<'a> createActor = 
         let actorStore = createActorStore<'a> createActor
         { new IActorStore<'a> with
               member __.GetActor(sessionId) = actorStore.PostAndReply(fun ch -> (Get sessionId), Some ch)
               member __.RemoveActor(sessionId) = actorStore.Post(Remove sessionId, None) }
     
-    /// Selects an agent to consume a message.
+    /// <summary>
+    /// Function type for selecting an agent to consume a message.
+    /// </summary>
     type AgentSelectorFunc<'a> = unit -> Async<CloudAgentKind<'a>>
     
+    /// <summary>
     /// Generates a pool of CloudAgents of a specific size that can be used to select an agent when required.
+    /// </summary>
     let CreateAgentSelector<'a>(size, createAgent : ActorKey -> CloudAgentKind<'a>) : AgentSelectorFunc<'a> = 
         let agents = 
             [ for i in 1 .. size -> 

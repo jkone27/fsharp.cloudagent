@@ -8,6 +8,9 @@ open FSharp.CloudAgent.Tests.Helpers
 open NUnit.Framework
 open System
 open Swensen.Unquote
+open Microsoft.FSharp.Linq.NullableOperators
+
+// https://docs.nunit.org/articles/nunit/writing-tests/assertions/assertions.html
 
 let private getActorStore() = Factory.CreateActorStore(fun _ -> getBasicAgent() |> snd)
 
@@ -32,14 +35,14 @@ let ``ActorStore manages multiple new actors``() =
     let actorStore = getActorStore()
     let isaac = actorStore.GetActor (ActorKey "isaac")
     let tony = actorStore.GetActor (ActorKey "tony")
-    isaac <>? tony
+    Assert.That(isaac <> tony)
 
 [<Test>]
 let ``ActorStore reuses existing actors``() =
     let actorStore = getActorStore()
     let first = actorStore.GetActor (ActorKey "isaac")
     let second = actorStore.GetActor (ActorKey "isaac")
-    first =? second
+    Assert.That(first, Is.EqualTo second)
 
 [<Test>]
 let ``ActorStore removes existing actors``() =
@@ -47,7 +50,7 @@ let ``ActorStore removes existing actors``() =
     let first = actorStore.GetActor (ActorKey "isaac")
     actorStore.RemoveActor (ActorKey "isaac")
     let second = actorStore.GetActor (ActorKey "isaac")
-    first <>? second
+    Assert.That(first <> second)
 
 [<Test>]
 let ``ActorStore disposes of removed agents``() =
